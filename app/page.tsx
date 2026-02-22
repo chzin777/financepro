@@ -233,13 +233,28 @@ export default function Home() {
             ))}
           </nav>
 
-          <button
-            onClick={() => setShowAddTransaction(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Nova Transação</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Always-visible balance */}
+            <button
+              onClick={() => setShowSetBalance(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--background-secondary)] hover:bg-[var(--background-tertiary)] border border-[var(--border)] transition-all group"
+              title="Clique para ajustar saldo"
+            >
+              <div className={`w-2 h-2 rounded-full ${data.balance >= 0 ? 'bg-[var(--success)]' : 'bg-[var(--danger)]'}`} />
+              <span className={`text-sm font-bold number-display ${data.balance >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+                {formatCurrency(data.balance)}
+              </span>
+              <Settings size={14} className="text-[var(--foreground-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+
+            <button
+              onClick={() => setShowAddTransaction(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">Nova Transação</span>
+            </button>
+          </div>
         </div>
       </header>
 
