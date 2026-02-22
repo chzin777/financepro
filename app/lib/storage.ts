@@ -6,6 +6,7 @@ const defaultData: FinanceData = {
   balance: 0,
   transactions: [],
   bills: [],
+  billPayments: [],
 };
 
 export function loadData(): FinanceData {

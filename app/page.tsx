@@ -26,6 +26,7 @@ import {
   Pencil,
   Filter,
   X,
+  ChevronLeft,
 } from 'lucide-react';
 import { FinanceData, Transaction, Bill, CATEGORIES, ExpenseCategory, MONTHS } from './lib/types';
 import {
@@ -76,6 +77,7 @@ export default function Home() {
   const [txFilterCategory, setTxFilterCategory] = useState<string>('all');
   const [txFilterMonth, setTxFilterMonth] = useState<number>(-1); // -1 = all
   const [showTxFilters, setShowTxFilters] = useState(false);
+  const [txPage, setTxPage] = useState(0);
 
   // Confirm delete state
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'transaction' | 'bill'; id: string; name: string } | null>(null);
@@ -151,6 +153,13 @@ export default function Home() {
     txFilterCategory !== 'all',
     txFilterMonth !== -1,
   ].filter(Boolean).length;
+
+  // Reset page when filters/search change
+  useEffect(() => { setTxPage(0); }, [txSearch, txFilterType, txFilterCategory, txFilterMonth]);
+
+  const TX_PER_PAGE = 15;
+  const txTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TX_PER_PAGE));
+  const paginatedTransactions = filteredTransactions.slice(txPage * TX_PER_PAGE, (txPage + 1) * TX_PER_PAGE);
 
   const { overdueBills, upcomingBills } = useMemo(() => {
     const today = new Date();
@@ -831,9 +840,11 @@ export default function Home() {
             </div>
 
             {/* Results count */}
-            {(txSearch || activeFilterCount > 0) && (
+            {(txSearch || activeFilterCount > 0 || filteredTransactions.length > TX_PER_PAGE) && (
               <p className="text-xs text-[var(--foreground-muted)]">
-                {filteredTransactions.length} transação{filteredTransactions.length !== 1 ? 'ões' : ''} encontrada{filteredTransactions.length !== 1 ? 's' : ''}
+                {filteredTransactions.length > TX_PER_PAGE
+                  ? `Mostrando ${txPage * TX_PER_PAGE + 1}-${Math.min((txPage + 1) * TX_PER_PAGE, filteredTransactions.length)} de ${filteredTransactions.length} transações`
+                  : `${filteredTransactions.length} transação${filteredTransactions.length !== 1 ? 'ões' : ''} encontrada${filteredTransactions.length !== 1 ? 's' : ''}`}
               </p>
             )}
 
@@ -854,8 +865,9 @@ export default function Home() {
                 <p className="text-sm text-[var(--foreground-muted)]">Nenhuma transação encontrada com esses filtros</p>
               </div>
             ) : (
+              <>
               <div className="space-y-2">
-                {filteredTransactions.map((tx, idx) => {
+                {paginatedTransactions.map((tx, idx) => {
                   const cat = CATEGORIES[tx.category as ExpenseCategory];
                   return (
                     <div
@@ -898,6 +910,58 @@ export default function Home() {
                   );
                 })}
               </div>
+
+              {/* Pagination */}
+              {txTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <button
+                    onClick={() => setTxPage(p => Math.max(0, p - 1))}
+                    disabled={txPage === 0}
+                    className="p-2 rounded-lg hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages: (number | string)[] = [];
+                      if (txTotalPages <= 7) {
+                        for (let i = 0; i < txTotalPages; i++) pages.push(i);
+                      } else {
+                        pages.push(0);
+                        if (txPage > 2) pages.push('...');
+                        for (let i = Math.max(1, txPage - 1); i <= Math.min(txTotalPages - 2, txPage + 1); i++) pages.push(i);
+                        if (txPage < txTotalPages - 3) pages.push('...');
+                        pages.push(txTotalPages - 1);
+                      }
+                      return pages.map((p, i) =>
+                        typeof p === 'string' ? (
+                          <span key={`e${i}`} className="w-8 h-8 flex items-center justify-center text-xs text-[var(--foreground-muted)]">…</span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setTxPage(p)}
+                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                              txPage === p
+                                ? 'bg-[var(--accent)] text-white'
+                                : 'hover:bg-[var(--background-tertiary)] text-[var(--foreground-muted)]'
+                            }`}
+                          >
+                            {p + 1}
+                          </button>
+                        )
+                      );
+                    })()}
+                  </div>
+                  <button
+                    onClick={() => setTxPage(p => Math.min(txTotalPages - 1, p + 1))}
+                    disabled={txPage === txTotalPages - 1}
+                    className="p-2 rounded-lg hover:bg-[var(--background-tertiary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              )}
+              </>
             )}
           </div>
         )}
