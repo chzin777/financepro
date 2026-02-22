@@ -20,6 +20,8 @@ import {
   Loader2,
   AlertTriangle,
   AlertCircle,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 import { FinanceData, CATEGORIES, ExpenseCategory, MONTHS } from './lib/types';
 import {
@@ -29,6 +31,8 @@ import {
   createBill,
   deleteBill,
   updateBalance,
+  payBill,
+  unpayBill,
   formatCurrency,
   formatDate,
   formatDateShort,
@@ -49,7 +53,7 @@ import { MonthlyChart, ForecastChart, CategoryChart } from './components/Charts'
 type Tab = 'dashboard' | 'transactions' | 'bills' | 'forecast';
 
 export default function Home() {
-  const [data, setData] = useState<FinanceData>({ balance: 0, transactions: [], bills: [] });
+  const [data, setData] = useState<FinanceData>({ balance: 0, transactions: [], bills: [], billPayments: [] });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showAddBill, setShowAddBill] = useState(false);
@@ -105,20 +109,21 @@ export default function Home() {
     const today = new Date();
     const todayDay = today.getDate();
     const activeBills = data.bills.filter(b => b.active);
+    const paidBillIds = new Set(data.billPayments.map(p => p.billId));
 
     const overdue = activeBills.filter(b => {
-      // Bill is overdue if dueDay already passed this month
-      return b.dueDay < todayDay;
+      // Bill is overdue if dueDay already passed this month and NOT paid
+      return b.dueDay < todayDay && !paidBillIds.has(b.id);
     });
 
     const upcoming = activeBills.filter(b => {
-      // Bill is upcoming if dueDay is today or within the next 5 days
+      // Bill is upcoming if dueDay is today or within the next 5 days and NOT paid
       const diff = b.dueDay - todayDay;
-      return diff >= 0 && diff <= 5;
+      return diff >= 0 && diff <= 5 && !paidBillIds.has(b.id);
     });
 
     return { overdueBills: overdue, upcomingBills: upcoming };
-  }, [data.bills]);
+  }, [data.bills, data.billPayments]);
 
   if (loading) {
     return (
@@ -214,6 +219,40 @@ export default function Home() {
       setData(prev => ({ ...prev, balance }));
     } catch (err) {
       console.error('Failed to set balance:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePayBill = async (billId: string) => {
+    setSaving(true);
+    try {
+      const result = await payBill(billId, currentMonth, currentYear);
+      setData(prev => ({
+        ...prev,
+        balance: result.balance,
+        billPayments: [...prev.billPayments, result.payment],
+      }));
+    } catch (err) {
+      console.error('Failed to pay bill:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnpayBill = async (billId: string) => {
+    setSaving(true);
+    try {
+      const result = await unpayBill(billId, currentMonth, currentYear);
+      setData(prev => ({
+        ...prev,
+        balance: result.balance,
+        billPayments: prev.billPayments.filter(
+          p => !(p.billId === billId && p.month === currentMonth && p.year === currentYear)
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to unpay bill:', err);
     } finally {
       setSaving(false);
     }
@@ -705,13 +744,29 @@ export default function Home() {
               <div className="space-y-2">
                 {data.bills.map((bill, idx) => {
                   const cat = CATEGORIES[bill.category as ExpenseCategory];
+                  const isPaid = data.billPayments.some(
+                    p => p.billId === bill.id && p.month === currentMonth && p.year === currentYear
+                  );
                   return (
                     <div
                       key={bill.id}
-                      className="glass-card p-4 animate-fade-in"
+                      className={`glass-card p-4 animate-fade-in transition-all ${isPaid ? 'opacity-60' : ''}`}
                       style={{ animationDelay: `${idx * 0.03}s` }}
                     >
                       <div className="flex items-center gap-3">
+                        {/* Pay/Unpay toggle */}
+                        <button
+                          onClick={() => isPaid ? handleUnpayBill(bill.id) : handlePayBill(bill.id)}
+                          disabled={saving}
+                          className={`flex-shrink-0 transition-all ${
+                            isPaid
+                              ? 'text-[var(--success)] hover:opacity-70'
+                              : 'text-[var(--foreground-muted)] hover:text-[var(--success)]'
+                          }`}
+                          title={isPaid ? 'Desmarcar como paga' : 'Marcar como paga'}
+                        >
+                          {isPaid ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                        </button>
                         <div
                           className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
                           style={{ backgroundColor: cat?.bgColor || 'var(--background-tertiary)' }}
@@ -720,7 +775,7 @@ export default function Home() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium truncate">{bill.name}</p>
+                            <p className={`font-medium truncate ${isPaid ? 'line-through text-[var(--foreground-muted)]' : ''}`}>{bill.name}</p>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
                               bill.type === 'fixed'
                                 ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
@@ -728,6 +783,11 @@ export default function Home() {
                             }`}>
                               {bill.type === 'fixed' ? 'Fixa' : 'Temporária'}
                             </span>
+                            {isPaid && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 bg-[var(--success-soft)] text-[var(--success)]">
+                                Paga ✓
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-[var(--foreground-muted)]">
                             Vence dia {bill.dueDay} • {cat?.label || bill.category}
@@ -737,7 +797,7 @@ export default function Home() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <p className="font-bold text-[var(--danger)] number-display">
+                          <p className={`font-bold number-display ${isPaid ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                             {formatCurrency(bill.amount)}
                           </p>
                           <button

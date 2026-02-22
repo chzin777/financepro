@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   varchar,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const balanceTable = pgTable('balance', {
@@ -37,3 +38,13 @@ export const billsTable = pgTable('bills', {
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const billPaymentsTable = pgTable('bill_payments', {
+  id: text('id').primaryKey(),
+  billId: text('bill_id').notNull(),
+  month: integer('month').notNull(), // 0-11
+  year: integer('year').notNull(),
+  paidAt: timestamp('paid_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('bill_month_year_idx').on(table.billId, table.month, table.year),
+]);

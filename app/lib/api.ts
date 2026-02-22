@@ -1,4 +1,4 @@
-import { Transaction, Bill, FinanceData } from './types';
+import { Transaction, Bill, BillPayment, FinanceData } from './types';
 
 /**
  * API client para comunicar com o banco de dados via API routes.
@@ -87,15 +87,55 @@ export async function deleteBill(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete bill');
 }
 
+// ============= BILL PAYMENTS =============
+
+export async function fetchBillPayments(month?: number, year?: number): Promise<BillPayment[]> {
+  const now = new Date();
+  const m = month ?? now.getMonth();
+  const y = year ?? now.getFullYear();
+  const res = await fetch(`/api/bill-payments?month=${m}&year=${y}`);
+  if (!res.ok) throw new Error('Failed to fetch bill payments');
+  const data = await res.json();
+  return data.payments;
+}
+
+export async function payBill(
+  billId: string,
+  month: number,
+  year: number
+): Promise<{ payment: BillPayment; balance: number }> {
+  const res = await fetch('/api/bill-payments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ billId, month, year }),
+  });
+  if (!res.ok) throw new Error('Failed to pay bill');
+  return res.json();
+}
+
+export async function unpayBill(
+  billId: string,
+  month: number,
+  year: number
+): Promise<{ balance: number }> {
+  const res = await fetch(
+    `/api/bill-payments?billId=${encodeURIComponent(billId)}&month=${month}&year=${year}`,
+    { method: 'DELETE' }
+  );
+  if (!res.ok) throw new Error('Failed to unpay bill');
+  return res.json();
+}
+
 // ============= LOAD ALL =============
 
 export async function loadAllData(): Promise<FinanceData> {
-  const [balance, transactions, bills] = await Promise.all([
+  const [balance, transactions, bills, billPayments] = await Promise.all([
     fetchBalance(),
     fetchTransactions(),
     fetchBills(),
+    fetchBillPayments(),
   ]);
-  return { balance, transactions, bills };
+  return { balance, transactions, bills, billPayments };
 }
 
 // ============= UTILITIES (kept from old storage) =============

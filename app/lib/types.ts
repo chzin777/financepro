@@ -22,10 +22,19 @@ export interface Bill {
   createdAt: string;
 }
 
+export interface BillPayment {
+  id: string;
+  billId: string;
+  month: number;
+  year: number;
+  paidAt: string;
+}
+
 export interface FinanceData {
   balance: number;
   transactions: Transaction[];
   bills: Bill[];
+  billPayments: BillPayment[];
 }
 
 export type ExpenseCategory =
