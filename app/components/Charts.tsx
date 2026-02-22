@@ -49,7 +49,7 @@ export function MonthlyChart({ data }: MonthlyChartProps) {
             padding: '12px',
           }}
           labelStyle={{ color: 'var(--foreground)' }}
-          formatter={(value: number) => [formatCurrency(value)]}
+          formatter={(value: number | undefined) => [formatCurrency(value ?? 0)]}
         />
         <Bar
           dataKey="income"
@@ -112,8 +112,8 @@ export function ForecastChart({ data }: ForecastChartProps) {
             padding: '12px',
           }}
           labelStyle={{ color: 'var(--foreground)' }}
-          formatter={(value: number, name: string) => [
-            formatCurrency(value),
+          formatter={(value: number | undefined, name: string | undefined) => [
+            formatCurrency(value ?? 0),
             name === 'projectedBalance' ? 'Saldo Projetado' : name === 'income' ? 'Receita' : 'Gastos',
           ]}
         />
@@ -173,7 +173,7 @@ export function CategoryChart({ data }: CategoryChartProps) {
             borderRadius: '12px',
             padding: '12px',
           }}
-          formatter={(value: number) => [formatCurrency(value)]}
+          formatter={(value: number | undefined) => [formatCurrency(value ?? 0)]}
         />
       </PieChart>
     </ResponsiveContainer>
