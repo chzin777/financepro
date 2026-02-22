@@ -164,8 +164,26 @@ export default function Home() {
   const { overdueBills, upcomingBills } = useMemo(() => {
     const today = new Date();
     const todayDay = today.getDate();
-    const activeBills = data.bills.filter(b => b.active);
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
     const paidBillIds = new Set(data.billPayments.map(p => p.billId));
+
+    // Only consider bills that have already started (startDate <= end of current month)
+    const activeBills = data.bills.filter(b => {
+      if (!b.active) return false;
+      const start = new Date(b.startDate);
+      // Bill hasn't started yet if its start month is after the current month
+      if (start.getFullYear() > currentYear || 
+          (start.getFullYear() === currentYear && start.getMonth() > currentMonth)) {
+        return false;
+      }
+      // For temporary bills, check if installments are exhausted
+      if (b.type === 'temporary' && b.totalInstallments && b.currentInstallment !== undefined) {
+        const monthsDiff = (currentYear - start.getFullYear()) * 12 + (currentMonth - start.getMonth());
+        if (b.currentInstallment + monthsDiff > b.totalInstallments) return false;
+      }
+      return true;
+    });
 
     const overdue = activeBills.filter(b => {
       // Bill is overdue if dueDay already passed this month and NOT paid
