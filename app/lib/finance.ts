@@ -68,36 +68,15 @@ export function getUpcomingSalaryDates(count: number = 6): Date[] {
 
 /**
  * Calcula o total de salário recebido em um mês.
- * Um pagamento pode cair no mês anterior se dia 1 é fim de semana.
+ * Cada mês tem conceitualmente 2 salários (dia 1 e dia 15),
+ * independente do ajuste de fim de semana mover a data para o mês anterior.
  */
 export function getSalaryForMonth(year: number, month: number): { dates: Date[]; total: number } {
-  const salaryDates: Date[] = [];
-  const monthStart = startOfMonth(new Date(year, month, 1));
-  const monthEnd = endOfMonth(new Date(year, month, 1));
-
-  // Check salary for this month day 1 and day 15
   const [day1, day15] = getSalaryDatesForMonth(year, month);
 
-  // Day 1 payment might fall in previous month
-  if (day1 >= monthStart && day1 <= monthEnd) {
-    salaryDates.push(day1);
-  }
-
-  if (day15 >= monthStart && day15 <= monthEnd) {
-    salaryDates.push(day15);
-  }
-
-  // Also check if next month's day 1 falls in this month
-  const nextMonth = month === 11 ? 0 : month + 1;
-  const nextYear = month === 11 ? year + 1 : year;
-  const nextDay1 = getSalaryDate(nextYear, nextMonth, 1);
-  if (nextDay1 >= monthStart && nextDay1 <= monthEnd) {
-    salaryDates.push(nextDay1);
-  }
-
   return {
-    dates: salaryDates,
-    total: salaryDates.length * 3000,
+    dates: [day1, day15],
+    total: 6000,
   };
 }
 
