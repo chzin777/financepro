@@ -52,6 +52,33 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH /api/bills - Edit a bill
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, name, amount, category, type, dueDay, totalInstallments, currentInstallment } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing bill id' }, { status: 400 });
+    }
+
+    await db.update(billsTable).set({
+      name,
+      amount,
+      category,
+      type,
+      dueDay,
+      totalInstallments: totalInstallments ?? null,
+      currentInstallment: currentInstallment ?? null,
+    }).where(eq(billsTable.id, id));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error updating bill:', error);
+    return NextResponse.json({ error: 'Failed to update bill' }, { status: 500 });
+  }
+}
+
 // DELETE /api/bills
 export async function DELETE(request: Request) {
   try {

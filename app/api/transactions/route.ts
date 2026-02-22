@@ -63,6 +63,50 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH /api/transactions - Edit a transaction
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, description, amount, type, category, date } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing transaction id' }, { status: 400 });
+    }
+
+    // Get old transaction to compute balance diff
+    const oldRows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id));
+    if (oldRows.length === 0) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    }
+
+    const old = oldRows[0];
+    const oldBalanceEffect = old.type === 'income' ? old.amount : -old.amount;
+    const newBalanceEffect = type === 'income' ? amount : -amount;
+    const balanceDiff = newBalanceEffect - oldBalanceEffect;
+
+    // Update transaction
+    await db.update(transactionsTable).set({
+      description,
+      amount,
+      type,
+      category,
+      date: new Date(date),
+    }).where(eq(transactionsTable.id, id));
+
+    // Update balance
+    const balanceRows = await db.select().from(balanceTable).limit(1);
+    const currentBalance = balanceRows[0]?.amount ?? 0;
+    const newBalance = currentBalance + balanceDiff;
+
+    await db.update(balanceTable).set({ amount: newBalance, updatedAt: new Date() }).where(eq(balanceTable.id, 1));
+
+    return NextResponse.json({ success: true, balance: newBalance });
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 });
+  }
+}
+
 // DELETE /api/transactions
 export async function DELETE(request: Request) {
   try {

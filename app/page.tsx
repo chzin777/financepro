@@ -22,14 +22,20 @@ import {
   AlertCircle,
   CheckCircle2,
   Circle,
+  Search,
+  Pencil,
+  Filter,
+  X,
 } from 'lucide-react';
-import { FinanceData, CATEGORIES, ExpenseCategory, MONTHS } from './lib/types';
+import { FinanceData, Transaction, Bill, CATEGORIES, ExpenseCategory, MONTHS } from './lib/types';
 import {
   loadAllData,
   createTransaction,
   deleteTransaction,
+  editTransaction,
   createBill,
   deleteBill,
+  editBill,
   updateBalance,
   payBill,
   unpayBill,
@@ -48,6 +54,9 @@ import {
 import AddTransactionModal from './components/AddTransactionModal';
 import AddBillModal from './components/AddBillModal';
 import SetBalanceModal from './components/SetBalanceModal';
+import ConfirmModal from './components/ConfirmModal';
+import EditTransactionModal from './components/EditTransactionModal';
+import EditBillModal from './components/EditBillModal';
 import { MonthlyChart, ForecastChart, CategoryChart } from './components/Charts';
 
 type Tab = 'dashboard' | 'transactions' | 'bills' | 'forecast';
@@ -60,6 +69,20 @@ export default function Home() {
   const [showSetBalance, setShowSetBalance] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Filter & search state for transactions
+  const [txSearch, setTxSearch] = useState('');
+  const [txFilterType, setTxFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [txFilterCategory, setTxFilterCategory] = useState<string>('all');
+  const [txFilterMonth, setTxFilterMonth] = useState<number>(-1); // -1 = all
+  const [showTxFilters, setShowTxFilters] = useState(false);
+
+  // Confirm delete state
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'transaction' | 'bill'; id: string; name: string } | null>(null);
+
+  // Edit modals state
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
 
   // Load data from API on mount
   useEffect(() => {
@@ -104,6 +127,30 @@ export default function Home() {
   );
 
   const totalBillsThisMonth = currentMonthBills.reduce((sum, b) => sum + b.amount, 0);
+
+  // Filtered transactions
+  const filteredTransactions = useMemo(() => {
+    return data.transactions.filter(tx => {
+      // Search filter
+      if (txSearch && !tx.description.toLowerCase().includes(txSearch.toLowerCase())) return false;
+      // Type filter
+      if (txFilterType !== 'all' && tx.type !== txFilterType) return false;
+      // Category filter
+      if (txFilterCategory !== 'all' && tx.category !== txFilterCategory) return false;
+      // Month filter
+      if (txFilterMonth !== -1) {
+        const txDate = new Date(tx.date);
+        if (txDate.getMonth() !== txFilterMonth) return false;
+      }
+      return true;
+    });
+  }, [data.transactions, txSearch, txFilterType, txFilterCategory, txFilterMonth]);
+
+  const activeFilterCount = [
+    txFilterType !== 'all',
+    txFilterCategory !== 'all',
+    txFilterMonth !== -1,
+  ].filter(Boolean).length;
 
   const { overdueBills, upcomingBills } = useMemo(() => {
     const today = new Date();
@@ -256,6 +303,57 @@ export default function Home() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEditTransaction = async (
+    id: string,
+    updates: { description: string; amount: number; type: 'income' | 'expense'; category: string; date: string }
+  ) => {
+    setSaving(true);
+    try {
+      const result = await editTransaction(id, updates);
+      setData(prev => ({
+        ...prev,
+        balance: result.balance,
+        transactions: prev.transactions.map(t =>
+          t.id === id ? { ...t, ...updates } : t
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to edit transaction:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditBill = async (
+    id: string,
+    updates: { name: string; amount: number; category: string; type: 'fixed' | 'temporary'; dueDay: number; totalInstallments?: number; currentInstallment?: number }
+  ) => {
+    setSaving(true);
+    try {
+      await editBill(id, updates);
+      setData(prev => ({
+        ...prev,
+        bills: prev.bills.map(b =>
+          b.id === id ? { ...b, ...updates } : b
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to edit bill:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    if (confirmDelete.type === 'transaction') {
+      await handleRemoveTransaction(confirmDelete.id);
+    } else {
+      await handleRemoveBill(confirmDelete.id);
+    }
+    setConfirmDelete(null);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -618,6 +716,127 @@ export default function Home() {
               </button>
             </div>
 
+            {/* Search & Filters */}
+            <div className="space-y-3">
+              {/* Search bar */}
+              <div className="relative">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--foreground-muted)]" />
+                <input
+                  type="text"
+                  className="input-field pl-10 pr-4"
+                  placeholder="Buscar por descrição..."
+                  value={txSearch}
+                  onChange={e => setTxSearch(e.target.value)}
+                />
+                {txSearch && (
+                  <button
+                    onClick={() => setTxSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--foreground-muted)] hover:text-[var(--foreground-secondary)]"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter toggle */}
+              <button
+                onClick={() => setShowTxFilters(!showTxFilters)}
+                className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl transition-all ${
+                  activeFilterCount > 0 || showTxFilters
+                    ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                    : 'text-[var(--foreground-muted)] hover:bg-[var(--background-tertiary)]'
+                }`}
+              >
+                <Filter size={16} />
+                Filtros
+                {activeFilterCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-[var(--accent)] text-white text-[10px] flex items-center justify-center font-bold">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Filter options */}
+              {showTxFilters && (
+                <div className="glass-card p-4 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Filtrar por</span>
+                    {activeFilterCount > 0 && (
+                      <button
+                        onClick={() => { setTxFilterType('all'); setTxFilterCategory('all'); setTxFilterMonth(-1); }}
+                        className="text-xs text-[var(--accent)] hover:underline"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Type filter */}
+                  <div>
+                    <label className="block text-xs text-[var(--foreground-muted)] mb-1.5">Tipo</label>
+                    <div className="flex gap-2">
+                      {[
+                        { value: 'all' as const, label: 'Todos' },
+                        { value: 'expense' as const, label: 'Gastos' },
+                        { value: 'income' as const, label: 'Receitas' },
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setTxFilterType(opt.value)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            txFilterType === opt.value
+                              ? 'bg-[var(--accent)] text-white'
+                              : 'bg-[var(--background-tertiary)] text-[var(--foreground-muted)] hover:bg-[var(--border)]'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Month filter */}
+                  <div>
+                    <label className="block text-xs text-[var(--foreground-muted)] mb-1.5">Mês</label>
+                    <select
+                      value={txFilterMonth}
+                      onChange={e => setTxFilterMonth(parseInt(e.target.value))}
+                      className="input-field text-sm py-2"
+                    >
+                      <option value={-1}>Todos os meses</option>
+                      {MONTHS.map((m, i) => (
+                        <option key={i} value={i}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Category filter */}
+                  <div>
+                    <label className="block text-xs text-[var(--foreground-muted)] mb-1.5">Categoria</label>
+                    <select
+                      value={txFilterCategory}
+                      onChange={e => setTxFilterCategory(e.target.value)}
+                      className="input-field text-sm py-2"
+                    >
+                      <option value="all">Todas as categorias</option>
+                      {(Object.entries(CATEGORIES) as [ExpenseCategory, typeof CATEGORIES[ExpenseCategory]][]).map(
+                        ([key, cat]) => (
+                          <option key={key} value={key}>{cat.icon} {cat.label}</option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Results count */}
+            {(txSearch || activeFilterCount > 0) && (
+              <p className="text-xs text-[var(--foreground-muted)]">
+                {filteredTransactions.length} transação{filteredTransactions.length !== 1 ? 'ões' : ''} encontrada{filteredTransactions.length !== 1 ? 's' : ''}
+              </p>
+            )}
+
             {data.transactions.length === 0 ? (
               <div className="glass-card p-12 text-center">
                 <Receipt size={48} className="mx-auto mb-4 text-[var(--foreground-muted)] opacity-30" />
@@ -629,14 +848,19 @@ export default function Home() {
                   Adicionar transação
                 </button>
               </div>
+            ) : filteredTransactions.length === 0 ? (
+              <div className="glass-card p-8 text-center">
+                <Search size={40} className="mx-auto mb-3 text-[var(--foreground-muted)] opacity-30" />
+                <p className="text-sm text-[var(--foreground-muted)]">Nenhuma transação encontrada com esses filtros</p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {data.transactions.map((tx, idx) => {
+                {filteredTransactions.map((tx, idx) => {
                   const cat = CATEGORIES[tx.category as ExpenseCategory];
                   return (
                     <div
                       key={tx.id}
-                      className="glass-card p-4 flex items-center gap-3 animate-fade-in"
+                      className="glass-card p-4 flex items-center gap-3 animate-fade-in group"
                       style={{ animationDelay: `${idx * 0.03}s` }}
                     >
                       <div
@@ -651,17 +875,23 @@ export default function Home() {
                           {cat?.label || tx.category} • {formatDate(tx.date)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         <p className={`font-bold number-display ${
                           tx.type === 'income' ? 'text-[var(--success)]' : 'text-[var(--danger)]'
                         }`}>
                           {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
                         </p>
                         <button
-                          onClick={() => handleRemoveTransaction(tx.id)}
-                          className="p-2 rounded-lg hover:bg-[var(--danger-soft)] text-[var(--foreground-muted)] hover:text-[var(--danger)] transition-all opacity-0 group-hover:opacity-100 sm:opacity-100"
+                          onClick={() => setEditingTransaction(tx)}
+                          className="p-2 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--foreground-muted)] hover:text-[var(--accent)] transition-all sm:opacity-0 sm:group-hover:opacity-100"
                         >
-                          <Trash2 size={16} />
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete({ type: 'transaction', id: tx.id, name: tx.description })}
+                          className="p-2 rounded-lg hover:bg-[var(--danger-soft)] text-[var(--foreground-muted)] hover:text-[var(--danger)] transition-all sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </div>
@@ -796,15 +1026,21 @@ export default function Home() {
                             )}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
                           <p className={`font-bold number-display ${isPaid ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                             {formatCurrency(bill.amount)}
                           </p>
                           <button
-                            onClick={() => handleRemoveBill(bill.id)}
+                            onClick={() => setEditingBill(bill)}
+                            className="p-2 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--foreground-muted)] hover:text-[var(--accent)] transition-all"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete({ type: 'bill', id: bill.id, name: bill.name })}
                             className="p-2 rounded-lg hover:bg-[var(--danger-soft)] text-[var(--foreground-muted)] hover:text-[var(--danger)] transition-all"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </div>
@@ -952,6 +1188,28 @@ export default function Home() {
         currentBalance={data.balance}
         onClose={() => setShowSetBalance(false)}
         onSet={handleSetBalance}
+      />
+      <EditTransactionModal
+        isOpen={!!editingTransaction}
+        transaction={editingTransaction}
+        onClose={() => setEditingTransaction(null)}
+        onSave={handleEditTransaction}
+      />
+      <EditBillModal
+        isOpen={!!editingBill}
+        bill={editingBill}
+        onClose={() => setEditingBill(null)}
+        onSave={handleEditBill}
+      />
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        title="Excluir permanentemente?"
+        message={confirmDelete ? `Tem certeza que deseja excluir "${confirmDelete.name}"? Essa ação não pode ser desfeita.` : ''}
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDelete(null)}
       />
     </div>
   );

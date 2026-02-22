@@ -58,6 +58,20 @@ export async function deleteTransaction(id: string): Promise<{ balance: number }
   return { balance: data.balance };
 }
 
+export async function editTransaction(
+  id: string,
+  updates: { description: string; amount: number; type: 'income' | 'expense'; category: string; date: string }
+): Promise<{ balance: number }> {
+  const res = await fetch('/api/transactions', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...updates }),
+  });
+  if (!res.ok) throw new Error('Failed to edit transaction');
+  const data = await res.json();
+  return { balance: data.balance };
+}
+
 // ============= BILLS =============
 
 export async function fetchBills(): Promise<Bill[]> {
@@ -85,6 +99,18 @@ export async function deleteBill(id: string): Promise<void> {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error('Failed to delete bill');
+}
+
+export async function editBill(
+  id: string,
+  updates: { name: string; amount: number; category: string; type: 'fixed' | 'temporary'; dueDay: number; totalInstallments?: number; currentInstallment?: number }
+): Promise<void> {
+  const res = await fetch('/api/bills', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...updates }),
+  });
+  if (!res.ok) throw new Error('Failed to edit bill');
 }
 
 // ============= BILL PAYMENTS =============
