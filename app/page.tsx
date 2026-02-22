@@ -18,6 +18,8 @@ import {
   RefreshCw,
   LayoutDashboard,
   Loader2,
+  AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 import { FinanceData, CATEGORIES, ExpenseCategory, MONTHS } from './lib/types';
 import {
@@ -98,6 +100,25 @@ export default function Home() {
   );
 
   const totalBillsThisMonth = currentMonthBills.reduce((sum, b) => sum + b.amount, 0);
+
+  const { overdueBills, upcomingBills } = useMemo(() => {
+    const today = new Date();
+    const todayDay = today.getDate();
+    const activeBills = data.bills.filter(b => b.active);
+
+    const overdue = activeBills.filter(b => {
+      // Bill is overdue if dueDay already passed this month
+      return b.dueDay < todayDay;
+    });
+
+    const upcoming = activeBills.filter(b => {
+      // Bill is upcoming if dueDay is today or within the next 5 days
+      const diff = b.dueDay - todayDay;
+      return diff >= 0 && diff <= 5;
+    });
+
+    return { overdueBills: overdue, upcomingBills: upcoming };
+  }, [data.bills]);
 
   if (loading) {
     return (
@@ -362,6 +383,91 @@ export default function Home() {
                 </p>
               </div>
             </div>
+
+            {/* Bills Alerts */}
+            {(overdueBills.length > 0 || upcomingBills.length > 0) && (
+              <div className="space-y-4">
+                {/* Overdue Bills */}
+                {overdueBills.length > 0 && (
+                  <div className="glass-card border border-[var(--danger)]/30 overflow-hidden">
+                    <div className="flex items-center gap-3 px-5 py-3 bg-[var(--danger-soft)] border-b border-[var(--danger)]/20">
+                      <AlertTriangle size={18} className="text-[var(--danger)]" />
+                      <h3 className="text-sm font-semibold text-[var(--danger)]">
+                        Contas Vencidas ({overdueBills.length})
+                      </h3>
+                    </div>
+                    <div className="divide-y divide-[var(--border)]">
+                      {overdueBills.map(bill => {
+                        const cat = CATEGORIES[bill.category as ExpenseCategory];
+                        const daysOverdue = new Date().getDate() - bill.dueDay;
+                        return (
+                          <div key={bill.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--background-tertiary)] transition-colors">
+                            <div
+                              className="w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                              style={{ backgroundColor: cat?.bgColor || 'var(--background-tertiary)' }}
+                            >
+                              {cat?.icon || '📋'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{bill.name}</p>
+                              <p className="text-xs text-[var(--danger)]">
+                                Venceu dia {bill.dueDay} • {daysOverdue} dia{daysOverdue !== 1 ? 's' : ''} atrás
+                                {bill.type === 'temporary' && bill.totalInstallments
+                                  ? ` • ${bill.currentInstallment}/${bill.totalInstallments}`
+                                  : ''}
+                              </p>
+                            </div>
+                            <p className="text-sm font-bold text-[var(--danger)] number-display flex-shrink-0">
+                              {formatCurrency(bill.amount)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Upcoming Bills */}
+                {upcomingBills.length > 0 && (
+                  <div className="glass-card border border-[var(--warning)]/30 overflow-hidden">
+                    <div className="flex items-center gap-3 px-5 py-3 bg-[var(--warning-soft)] border-b border-[var(--warning)]/20">
+                      <AlertCircle size={18} className="text-[var(--warning)]" />
+                      <h3 className="text-sm font-semibold text-[var(--warning)]">
+                        Contas Próximas do Vencimento ({upcomingBills.length})
+                      </h3>
+                    </div>
+                    <div className="divide-y divide-[var(--border)]">
+                      {upcomingBills.map(bill => {
+                        const cat = CATEGORIES[bill.category as ExpenseCategory];
+                        const daysUntil = bill.dueDay - new Date().getDate();
+                        return (
+                          <div key={bill.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--background-tertiary)] transition-colors">
+                            <div
+                              className="w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                              style={{ backgroundColor: cat?.bgColor || 'var(--background-tertiary)' }}
+                            >
+                              {cat?.icon || '📋'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{bill.name}</p>
+                              <p className="text-xs text-[var(--warning)]">
+                                {daysUntil === 0 ? 'Vence hoje!' : `Vence em ${daysUntil} dia${daysUntil !== 1 ? 's' : ''} (dia ${bill.dueDay})`}
+                                {bill.type === 'temporary' && bill.totalInstallments
+                                  ? ` • ${bill.currentInstallment}/${bill.totalInstallments}`
+                                  : ''}
+                              </p>
+                            </div>
+                            <p className="text-sm font-bold text-[var(--warning)] number-display flex-shrink-0">
+                              {formatCurrency(bill.amount)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
