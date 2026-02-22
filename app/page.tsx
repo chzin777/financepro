@@ -645,7 +645,7 @@ export default function Home() {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="glass-card p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <RefreshCw size={16} className="text-[var(--accent)]" />
@@ -672,6 +672,20 @@ export default function Home() {
                 </p>
                 <p className="text-xs text-[var(--foreground-muted)] mt-1">
                   {data.bills.filter(b => b.type === 'temporary' && b.active).length} conta(s)
+                </p>
+              </div>
+              <div className="glass-card p-4 gradient-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wallet size={16} className="text-[var(--foreground-secondary)]" />
+                  <span className="text-xs text-[var(--foreground-muted)]">Total</span>
+                </div>
+                <p className="text-lg font-bold number-display gradient-text">
+                  {formatCurrency(
+                    data.bills.filter(b => b.active).reduce((s, b) => s + b.amount, 0)
+                  )}
+                </p>
+                <p className="text-xs text-[var(--foreground-muted)] mt-1">
+                  {data.bills.filter(b => b.active).length} conta(s)
                 </p>
               </div>
             </div>
